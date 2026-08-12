@@ -32,16 +32,22 @@
  *       },
  *       internationalData: { declaredValue }  <- optional
  *     }
- *   accountCode is optional on origin/destination — per Saia's own docs,
- *   the API auto-selects one from the address if omitted.
+ *   accountCode is REQUIRED on origin — confirmed via a real 400 error
+ *   ("An Account Code must be Provided"), contradicting Saia's own product
+ *   description which claims it's optional/auto-selected. Set
+ *   SAIA_ACCOUNT_CODE in .env to your company's Saia account number and
+ *   it's applied automatically to every quote.
+ *
+ * CONFIRMED for Rate Quote (from a real successful quote, 2026-08-12):
+ *   - The full success response shape (see getRateQuote's return mapping).
+ *   - "Shipper" is a valid value for `payer`.
+ *   - An accountCode is required on origin (see SAIA_ACCOUNT_CODE above).
  *
  * STILL UNCONFIRMED for Rate Quote:
- *   1. The response shape on success — the spec only says "200: null",
- *      no example. parseAndCheck below is a defensive guess.
- *   2. Exact accepted values for `payer` (e.g. is it "Shipper"/"Third Party"/
- *      "Consignee", or something else?).
- *   3. Whether this dev-api.saia.com host is also the production host, or
+ *   1. Whether this dev-api.saia.com host is also the production host, or
  *      whether prod uses a different domain.
+ *   2. Other valid `payer` values ("Third Party"/"Consignee"/etc.) if you
+ *      ever need non-shipper-paid quotes.
  *
  * TRACKING is entirely unconfirmed — we only know the API exists in Saia's
  * catalog ("Tracking REST Customer API"), not its schema. getTrackingStatus()
@@ -122,7 +128,12 @@ function buildRateQuotePayload(input) {
   };
 
   if (input.pickupDate) payload.pickUpDate = input.pickupDate;
-  if (input.originAccountCode) payload.origin.accountCode = input.originAccountCode;
+  // CONFIRMED via a real 400 response: an accountCode is required, despite
+  // Saia's own product description claiming it's optional/auto-selected.
+  // Falls back to SAIA_ACCOUNT_CODE (your company's Saia account number)
+  // so the front end doesn't need to supply one on every request.
+  const originAccountCode = input.originAccountCode || process.env.SAIA_ACCOUNT_CODE;
+  if (originAccountCode) payload.origin.accountCode = originAccountCode;
   if (input.destAccountCode) payload.destination.accountCode = input.destAccountCode;
   if (input.thirdPartyAccountCode) {
     payload.thirdPartyDetails = { accountCode: input.thirdPartyAccountCode };
@@ -157,14 +168,26 @@ async function getRateQuote(input) {
 
   const data = await res.json().catch(() => null);
   if (!res.ok) {
-    throw new Error(`Saia rate quote HTTP error (${res.status}): ${JSON.stringify(data)}`);
+    // CONFIRMED real failure shape: { status: "FAIL", fault, errors: [...] }
+    const firstError = data?.errors?.[0];
+    const detail = firstError ? Object.values(firstError)[0]?.message : null;
+    throw new Error(`Saia rate quote failed: ${detail || JSON.stringify(data)}`);
   }
-  // TODO: confirm the real error shape once you can see a failed response —
-  // the spec doesn't document one. This is a defensive guess, not confirmed.
-  if (data && (data.code || data.Code || data.error)) {
-    throw new Error(`Saia rate quote error: ${JSON.stringify(data)}`);
-  }
-  return data;
+
+  // CONFIRMED real success shape (from a live quote, 2026-08-12). Normalized
+  // into the field names the front end expects, with the full raw response
+  // kept alongside for anything not surfaced yet.
+  return {
+    mock: false,
+    totalCharge: data.rateDetails?.totalInvoice ?? null,
+    currency: "USD",
+    transitDays: data.standardServiceDays ?? null,
+    validUntil: data.expirationDate ?? null,
+    quoteNumber: data.quoteNumber ?? null,
+    estimatedDeliveryDate: data.estimatedDeliveryDate ?? null,
+    tariff: data.rateDetails?.tariff ?? null,
+    raw: data,
+  };
 }
 
 /* ---------------------------------------------------------
