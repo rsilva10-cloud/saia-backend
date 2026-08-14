@@ -467,7 +467,7 @@ function buildPickupXml(input) {
   <AccountNumber>${input.accountNumber || process.env.SAIA_ACCOUNT_CODE || ""}</AccountNumber>
   <CompanyName>${input.companyName || ""}</CompanyName>
   <Street>${input.street || ""}</Street>
-  <Box></Box>
+  <Box>${input.box || ""}</Box>
   <City>${input.city || ""}</City>
   <State>${input.state || ""}</State>
   <Zipcode>${input.originZip || ""}</Zipcode>

@@ -47,10 +47,10 @@ app.post("/api/saia/track", async (req, res) => {
 
 app.post("/api/saia/book-pickup", async (req, res) => {
   try {
-    const { originZip, contactName, contactPhone, pickupDate, readyTime, closeTime } = req.body || {};
-    if (!originZip || !contactName || !contactPhone || !pickupDate || !readyTime || !closeTime) {
+    const { originZip, accountNumber, contactName, contactPhone, pickupDate, readyTime, closeTime } = req.body || {};
+    if (!originZip || !accountNumber || !contactName || !contactPhone || !pickupDate || !readyTime || !closeTime) {
       return res.status(400).json({
-        error: "originZip, contactName, contactPhone, pickupDate, readyTime, and closeTime are required",
+        error: "originZip, accountNumber, contactName, contactPhone, pickupDate, readyTime, and closeTime are required",
       });
     }
     const result = await createPickup(req.body);
