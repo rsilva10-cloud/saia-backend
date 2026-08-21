@@ -6,6 +6,18 @@ const { getRateQuote, getTrackingStatus, createPickup, MOCK_MODE } = require("./
 const app = express();
 app.use(express.json());
 
+// Defense in depth — every route here already has its own try/catch, but
+// this is the safety net if an unusual failure mode (a Saia API quirk we
+// haven't seen yet, etc.) somehow slips past one. Without this, Node's
+// default behavior for an unhandled rejection is to crash the whole
+// service, taking down Rate Quote/Tracking/Pickup for the entire team.
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled rejection (server kept running):", err);
+});
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception (server kept running):", err);
+});
+
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || "*").split(",").map((s) => s.trim());
 app.use(
   cors({
